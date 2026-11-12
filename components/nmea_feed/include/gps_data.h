@@ -1,15 +1,18 @@
 #pragma once
 
-typedef struct gps_data_t
+typedef struct gps_data
 {
-    double utc,
-           lat,
-           lon,
-           speed,
-           heading;
+    float utc,
+        lat,
+        lon,
+        speed,
+        heading;
 
     short day,
-          month;
+        month,
+        year;
+} GpsData;
 
-    int year;
-}
+GpsData create_gps_data();
+
+void log_info_gps_data(const GpsData *g);

@@ -56,7 +56,7 @@ int split(const char delim,
 
         len = r - l + 1;
 
-        tokens[i] = (char *)calloc(len + 1, sizeof(char));
+        tokens[i] = calloc(len + 1, sizeof(char));
         strncpy(tokens[i], string + l, len - 1);
 
         l = r + 1;

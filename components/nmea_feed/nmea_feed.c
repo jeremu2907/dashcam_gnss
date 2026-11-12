@@ -4,6 +4,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 
+#include "gps_data.h"
 #include "nmea_feed.h"
 #include "nmea_helper.h"
 #include "nmea_sentences.h"
@@ -17,27 +18,29 @@ void task_nmea_feed(void *pvParameters)
 {
     const TickType_t xDelay = 1000 / portTICK_PERIOD_MS;
 
+    GpsData gps_data = create_gps_data();
+
     size_t i = 0;
     while (true)
     {
         const char *nmea = nmea_sentences[i];
-        if (is_nmea_gga(nmea) ||
-            is_nmea_rmc(nmea))
+        const bool is_gga = is_nmea_gga(nmea);
+        const bool is_rmc = is_nmea_rmc(nmea);
+        if (is_gga || is_rmc)
         {
-            // ESP_LOGI(TAG, "%s", nmea);
             size_t sentence_checksum_size = count_char('*', nmea) + 1;
-            char **sentence_checksum = (char **)calloc(sentence_checksum_size, sizeof(char *));
+            char **sentence_checksum = calloc(sentence_checksum_size, sizeof(char *));
 
             if (split('*', nmea, sentence_checksum, sentence_checksum_size) != 0)
             {
                 vTaskDelay(xDelay);
                 free(sentence_checksum);
             }
-            ESP_LOGI(TAG, "\nSentence: %s\n Checksum: %s", sentence_checksum[0], sentence_checksum[sentence_checksum_size - 1]);
+            ESP_LOGI(TAG, "\nSentence: %s\nChecksum: %s", sentence_checksum[0], sentence_checksum[sentence_checksum_size - 1]);
 
             const char *nmea_fields_str = sentence_checksum[0];
             size_t tokens_size = count_char(',', nmea_fields_str) + 1;
-            char **tokens = (char **)calloc(tokens_size, sizeof(char *));
+            char **tokens = calloc(tokens_size, sizeof(char *));
 
             if (split(',', nmea_fields_str, tokens, tokens_size) != 0)
             {
@@ -46,10 +49,15 @@ void task_nmea_feed(void *pvParameters)
                 free(sentence_checksum);
             }
 
-            for (size_t u = 0; u < tokens_size; u++)
+            if (is_gga)
             {
-                ESP_LOGI(TAG, "%s", tokens[u]);
+                parse_gga(tokens, tokens_size, &gps_data);
             }
+            else if(is_rmc)
+            {
+                parse_rmc(tokens, tokens_size, &gps_data);
+            }
+            log_info_gps_data(&gps_data);
 
             vTaskDelay(xDelay);
             free(tokens);
