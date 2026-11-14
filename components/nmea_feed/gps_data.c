@@ -26,14 +26,14 @@ GpsData create_gps_data()
 void log_info_gps_data(const GpsData *g)
 {
     ESP_LOGI(TAG, "\n\
-        utc: %fs\n\
-        lat: %fdeg\n\
-        lon: %fdeg\n\
-        spd: %fkts\n\
-        hea: %fdeg T\n\
-         dd: %d\n\
-         mm: %d\n\
-         yy: %d\n\
+        utc: %11.3f s\n\
+        lat: %11.6f deg\n\
+        lon: %11.6f deg\n\
+        spd: %11.3f kts\n\
+        hea: %11.3f deg T\n\
+         dd: %11d\n\
+         mm: %11d\n\
+         yy: %11d\n\
         ",
         g->utc,
         g->lat,

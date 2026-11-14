@@ -175,7 +175,7 @@ float parse_float(char *const token, char *name)
     return val;
 }
 
-void parse_yymmdd(char *const token, short fields[3])
+void parse_ddmmyy(char *const token, short fields[3])
 {
     size_t field_size = 3;
 
@@ -218,7 +218,7 @@ void parse_gga(char *const *tokens, size_t size, GpsData *gps_data)
 
 void parse_rmc(char *const *tokens, size_t size, GpsData *gps_data)
 {
-    if (size < 6)
+    if (size < 10)
     {
         ESP_LOGE(TAG, "Invalid number of rmc tokens");
         return;
@@ -247,7 +247,7 @@ void parse_rmc(char *const *tokens, size_t size, GpsData *gps_data)
 
     size_t ddmmyy_idx = 9;
     short ddmmyy[3] = {0};
-    parse_yymmdd(tokens[ddmmyy_idx], ddmmyy);
+    parse_ddmmyy(tokens[ddmmyy_idx], ddmmyy);
     gps_data->day = ddmmyy[0];
     gps_data->month = ddmmyy[1];
     gps_data->year = ddmmyy[2];
