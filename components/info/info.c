@@ -7,7 +7,7 @@
 #include "esp_psram.h"
 #include "esp_heap_caps.h"
 
-#define TAG "A1_INFO"
+#define TAG "info"
 
 void get_info(void)
 {
