@@ -63,10 +63,7 @@ void task_nmea_feed(void *pvParameters)
             size_t gps_data_str_size = 256;
             char gps_data_str[gps_data_str_size];
             int buf_size = gps_data_to_string(gps_data, gps_data_str, gps_data_str_size);
-            gps_data_str[buf_size] = '\n';
-            gps_data_str[buf_size + 1] = '\0';
-            ESP_LOGI(TAG, "%s", gps_data_str);
-            enqueue_gps(gps_data_str, buf_size + 2);
+            enqueue_gps(gps_data_str, buf_size);
 
             vTaskDelay(xDelay);
         }

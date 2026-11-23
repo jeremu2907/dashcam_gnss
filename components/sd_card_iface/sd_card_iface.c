@@ -71,7 +71,7 @@ void write_gps_queue_to_file()
     Node *it = gps_snapshot_queue->front;
     while (it != NULL)
     {
-        fprintf(f, "%s", (char*)it->data);
+        fprintf(f, "%s\n", (char*)it->data);
         it = it->next;
     }
 
@@ -146,7 +146,7 @@ void enqueue_data(char *data, size_t data_size, QueueType queue_type)
 {
     Node *node = make_node();
 
-    node->data = (char *)calloc(data_size, sizeof(char));
+    node->data = (char *)calloc(data_size + 1, sizeof(char));
     strncpy(node->data, data, data_size);
 
     switch (queue_type)
