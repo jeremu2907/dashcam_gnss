@@ -9,6 +9,7 @@
 #include "nmea_helper.h"
 #include "nmea_sentences.h"
 #include "utils/include/string_utils.h"
+#include "sd_card_iface/include/sd_card_iface.h"
 
 #define TAG "nmea_feed"
 #define CHECKSUM_SPLIT_FIELDS 2
@@ -57,7 +58,15 @@ void task_nmea_feed(void *pvParameters)
             {
                 parse_rmc(tokens_buff, tokens_size, gps_data);
             }
-            log_info_gps_data(gps_data);
+            // log_info_gps_data(gps_data);
+
+            size_t gps_data_str_size = 256;
+            char gps_data_str[gps_data_str_size];
+            int buf_size = gps_data_to_string(gps_data, gps_data_str, gps_data_str_size);
+            gps_data_str[buf_size] = '\n';
+            gps_data_str[buf_size + 1] = '\0';
+            ESP_LOGI(TAG, "%s", gps_data_str);
+            enqueue_gps(gps_data_str, buf_size + 2);
 
             vTaskDelay(xDelay);
         }

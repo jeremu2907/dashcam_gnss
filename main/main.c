@@ -10,6 +10,7 @@
 #include "esp_log.h"
 
 #define SD_STACK_SIZE 1024 * 8
+#define NMEA_STACK_SIZE 1024 * 8
 
 void app_main(void)
 {
@@ -18,6 +19,6 @@ void app_main(void)
     static GpsData gps_data;
     gps_data = create_gps_data();
 
-    // xTaskCreate(task_nmea_feed, "periodic", 1000, &gps_data, 1, NULL);
     xTaskCreate(task_sd_card, "sd_card", SD_STACK_SIZE, NULL, 1, NULL);
+    xTaskCreate(task_nmea_feed, "periodic", NMEA_STACK_SIZE, &gps_data, 1, NULL);
 }

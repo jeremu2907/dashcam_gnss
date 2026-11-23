@@ -1,5 +1,7 @@
-#include "esp_log.h"
+#include <stdio.h>
 #include <math.h>
+
+#include "esp_log.h"
 
 #include "gps_data.h"
 
@@ -44,4 +46,12 @@ void log_info_gps_data(const GpsData *g)
         g->month,
         g->year
     );
+}
+
+int gps_data_to_string(const GpsData *g, char *buf, size_t buf_size)
+{
+    return snprintf(buf, buf_size,
+                    "%.3f,%.6f,%.6f,%.3f,%.3f,%d,%d,%d",
+                    g->utc, g->lat, g->lon, g->speed, g->heading,
+                    g->day, g->month, g->year);
 }

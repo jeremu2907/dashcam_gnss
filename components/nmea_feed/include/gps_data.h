@@ -16,3 +16,5 @@ typedef struct gps_data
 GpsData create_gps_data();
 
 void log_info_gps_data(const GpsData *g);
+
+int gps_data_to_string(const GpsData *g, char *buf, size_t buf_size);
