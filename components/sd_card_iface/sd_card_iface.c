@@ -21,7 +21,6 @@
 
 #define QUEUE_MIN_ITEMS_TO_WRITE 5
 #define QUEUE_GPS_LENGTH 64
-#define QUEUE_TIMEOUT 5000 / portTICK_PERIOD_MS
 
 #define GPS_CSV_ROW_MAX_LENGTH 256
 
@@ -30,6 +29,9 @@ static char *s_gps_csv_log_path = SD_MOUNT_PATH "/00000000.csv";
 static SemaphoreHandle_t s_gps_queue_mtx;
 static QueueHandle_t s_gps_queue_active;
 static QueueHandle_t s_gps_queue_snapshot;
+
+const int QUEUE_GPS_MUTEX_TIMEOUT = 5000 / portTICK_PERIOD_MS;
+const int QUEUE_TIMEOUT = 1000 / portTICK_PERIOD_MS;
 
 FILE *open_file(char *path)
 {
@@ -108,14 +110,12 @@ void task_sd_card(void *pvParameters)
 
     sdmmc_card_print_info(stdout, out_card_ptr);
 
-    const TickType_t xDelay = 1000 / portTICK_PERIOD_MS;
     while (true)
     {
-        if (xSemaphoreTake(s_gps_queue_mtx, QUEUE_TIMEOUT) == pdTRUE)
+        if (xSemaphoreTake(s_gps_queue_mtx, QUEUE_GPS_MUTEX_TIMEOUT) == pdTRUE)
         {
-            bool ready = uxQueueMessagesWaiting(s_gps_queue_active) >= QUEUE_MIN_ITEMS_TO_WRITE;
-
-            if (ready)
+            bool ready = uxQueueMessagesWaiting(s_gps_queue_active) > QUEUE_MIN_ITEMS_TO_WRITE;
+            if(ready)
             {
                 write_gps_queue_to_file();
             }
@@ -125,9 +125,9 @@ void task_sd_card(void *pvParameters)
                 ESP_LOGE(TAG, "Could not give gps_queue_semphr in task_sd_card");
             }
 
-            if (!ready)
+            if(!ready)
             {
-                vTaskDelay(xDelay);
+                vTaskDelay(QUEUE_TIMEOUT);
             }
         }
         else
@@ -142,7 +142,7 @@ void task_sd_card(void *pvParameters)
 
 void enqueue_gps(char *data)
 {
-    if (xSemaphoreTake(s_gps_queue_mtx, QUEUE_TIMEOUT) == pdTRUE)
+    if (xSemaphoreTake(s_gps_queue_mtx, QUEUE_GPS_MUTEX_TIMEOUT) == pdTRUE)
     {
         if (xQueueSendToBack(s_gps_queue_active, &data, 0) != pdPASS)
         {
