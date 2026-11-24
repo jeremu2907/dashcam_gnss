@@ -2,6 +2,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
 #include "freertos/semphr.h"
 
 #include "esp_log.h"
@@ -13,24 +14,22 @@
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"
 
 #include "sd_card_iface.h"
-#include "linked_list/include/linked_list.h"
 
 #define TAG "sd_card_iface"
 #define SD_MOUNT_PATH "/sdcard"
-#define FILE_PATH_GPS SD_MOUNT_PATH "/gps.csv"
-#define MUTEX_TIMEOUT 5000 / portTICK_PERIOD_MS
 #define FILE_MODE "a"
 
-typedef struct linked_list LineQueue;
+#define QUEUE_MIN_ITEMS_TO_WRITE 5
+#define QUEUE_GPS_LENGTH 64
+#define QUEUE_TIMEOUT 5000 / portTICK_PERIOD_MS
 
-static LineQueue *gps_queue;
-static LineQueue *gps_snapshot_queue;
-static SemaphoreHandle_t gps_queue_mtx;
+#define GPS_CSV_ROW_MAX_LENGTH 256
 
-typedef enum queue_type : int
-{
-    GPS = 1
-} QueueType;
+static char *s_gps_csv_log_path = SD_MOUNT_PATH "/00000000.csv";
+
+static SemaphoreHandle_t s_gps_queue_mtx;
+static QueueHandle_t s_gps_queue_active;
+static QueueHandle_t s_gps_queue_snapshot;
 
 FILE *open_file(char *path)
 {
@@ -46,46 +45,33 @@ FILE *open_file(char *path)
 
 void write_gps_queue_to_file()
 {
-    {
-        if (xSemaphoreTake(gps_queue_mtx, MUTEX_TIMEOUT) == pdFALSE)
-        {
-            ESP_LOGE(TAG, "Could not aquire mutex to write gps to file");
-            return;
-        }
-        LineQueue *empty_queue = gps_snapshot_queue;
-        gps_snapshot_queue = gps_queue;
-        gps_queue = empty_queue;
-        if (xSemaphoreGive(gps_queue_mtx) == pdFALSE)
-        {
-            ESP_LOGE(TAG, "Could not release mutex to write gps to file");
-            return;
-        }
-    }
-    FILE *f = open_file(FILE_PATH_GPS);
+    FILE *f = open_file(s_gps_csv_log_path);
 
     if (f == NULL)
     {
         return;
     }
 
-    Node *it = gps_snapshot_queue->front;
-    while (it != NULL)
+    QueueHandle_t temp = s_gps_queue_active;
+    s_gps_queue_active = s_gps_queue_snapshot;
+    s_gps_queue_snapshot = temp;
+
+    char *gps_row_str;
+    while (xQueueReceive(s_gps_queue_snapshot, &gps_row_str, 0) != errQUEUE_EMPTY)
     {
-        fprintf(f, "%s\n", (char*)it->data);
-        it = it->next;
+        fprintf(f, "%s\n", gps_row_str);
+        free(gps_row_str);
     }
 
     fclose(f);
     ESP_LOGI(TAG, "File written");
-
-    clear_linked_list(gps_snapshot_queue);
 }
 
 void task_sd_card(void *pvParameters)
 {
-    gps_queue_mtx = xSemaphoreCreateMutex();
-    gps_queue = make_linked_list(GPS);
-    gps_snapshot_queue = make_linked_list(GPS);
+    s_gps_queue_mtx = xSemaphoreCreateMutex();
+    s_gps_queue_active = xQueueCreate(QUEUE_GPS_LENGTH, sizeof(char *));
+    s_gps_queue_snapshot = xQueueCreate(QUEUE_GPS_LENGTH, sizeof(char *));
 
     ESP_LOGI(TAG, "Initializing SDMMC Host");
     sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT();
@@ -125,51 +111,51 @@ void task_sd_card(void *pvParameters)
     const TickType_t xDelay = 1000 / portTICK_PERIOD_MS;
     while (true)
     {
-        if (gps_queue->size > 5)
+        if (xSemaphoreTake(s_gps_queue_mtx, QUEUE_TIMEOUT) == pdTRUE)
         {
-            write_gps_queue_to_file();
-        }
+            bool ready = uxQueueMessagesWaiting(s_gps_queue_active) >= QUEUE_MIN_ITEMS_TO_WRITE;
 
-        vTaskDelay(xDelay);
+            if (ready)
+            {
+                write_gps_queue_to_file();
+            }
+
+            if (xSemaphoreGive(s_gps_queue_mtx) == pdFALSE)
+            {
+                ESP_LOGE(TAG, "Could not give gps_queue_semphr in task_sd_card");
+            }
+
+            if (!ready)
+            {
+                vTaskDelay(xDelay);
+            }
+        }
+        else
+        {
+            ESP_LOGE(TAG, "Could not take gps_queue_semphr in task_sd_card");
+        }
     }
 
-    destroy_linked_list(&gps_queue);
-    destroy_linked_list(&gps_snapshot_queue);
-
     sdmmc_host_deinit();
-
-    vSemaphoreDelete(gps_queue_mtx);
     vTaskDelete(NULL);
 }
 
-void enqueue_data(char *data, size_t data_size, QueueType queue_type)
+void enqueue_gps(char *data)
 {
-    Node *node = make_node();
-
-    node->data = (char *)calloc(data_size + 1, sizeof(char));
-    strncpy(node->data, data, data_size);
-
-    switch (queue_type)
+    if (xSemaphoreTake(s_gps_queue_mtx, QUEUE_TIMEOUT) == pdTRUE)
     {
-    case GPS:
-        push_back_take(gps_queue, &node, queue_type);
-        break;
+        if (xQueueSendToBack(s_gps_queue_active, &data, 0) != pdPASS)
+        {
+            free(data);
+        }
+
+        if (xSemaphoreGive(s_gps_queue_mtx) == pdFALSE)
+        {
+            ESP_LOGE(TAG, "Could not give gps_queue_semphr after enqueuing gps");
+        }
     }
-}
-
-void enqueue_gps(char *data, size_t data_size)
-{
-    if (xSemaphoreTake(gps_queue_mtx, MUTEX_TIMEOUT) == pdFALSE)
+    else
     {
-        ESP_LOGE(TAG, "Could not aquire mutex to enqueue gps");
-        return;
-    }
-
-    enqueue_data(data, data_size, GPS);
-
-    if (xSemaphoreGive(gps_queue_mtx) == pdFALSE)
-    {
-        ESP_LOGE(TAG, "Could not release mutex after enqueued gps");
-        return;
+        ESP_LOGE(TAG, "Could not take gps_queue_semphr to enqeue gps");
     }
 }

@@ -3,5 +3,4 @@ idf_component_register(SRCS "sd_card_iface.c"
                                  ".."
                     PRIV_REQUIRES esp_driver_sdmmc
                                   sdmmc
-                                  fatfs
-                                  linked_list)
+                                  fatfs)

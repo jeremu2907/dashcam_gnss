@@ -14,6 +14,7 @@
 #define TAG "nmea_feed"
 #define CHECKSUM_SPLIT_FIELDS 2
 #define MAX_NMEA_FIELDS 32
+#define GPS_CSV_ROW_MAX_LENGTH 256
 
 static const size_t NMEA_SIZE = sizeof(nmea_sentences) / sizeof(nmea_sentences[0]);
 
@@ -60,10 +61,9 @@ void task_nmea_feed(void *pvParameters)
             }
             // log_info_gps_data(gps_data);
 
-            size_t gps_data_str_size = 256;
-            char gps_data_str[gps_data_str_size];
-            int buf_size = gps_data_to_string(gps_data, gps_data_str, gps_data_str_size);
-            enqueue_gps(gps_data_str, buf_size);
+            char *gps_data_str = calloc(GPS_CSV_ROW_MAX_LENGTH, sizeof(char));
+            gps_data_to_string(gps_data, gps_data_str, GPS_CSV_ROW_MAX_LENGTH);
+            enqueue_gps(gps_data_str);
 
             vTaskDelay(xDelay);
         }
